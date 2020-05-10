@@ -20,6 +20,7 @@ import string
 from nltk.util import ngrams
 import random
 from collections import Counter
+from sklearn.metrics import homogeneity_score,v_measure_score
 nltk.download('averaged_perceptron_tagger')
 matplotlib.use('agg')
 
@@ -58,17 +59,17 @@ def preprocess(x,n_grams,lower_case=True,punctuation=True,numbers=True,unicode=T
             chunked = chunkParser.parse(tagged)
             #chunked.draw()
             #print(chunked)
-            n_gram_done = ngrams(chunked, n_grams)
+            n_gram_done = ngrams(tagged, n_grams)
             #rint(n_grams, ' ARE: '+ [' '.join(grams) for grams in n_gram_done])
             return tagged,chunked,n_gram_done
         
         return description
 
-directory = '20news-19997/20_newsgroups'
+directory = 'Datasets/20news-19997/20_newsgroups'
 
 #PREPROCESSING
 for topic in random.sample(os.listdir(directory),3):
-    sub_dir = '20news-19997/20_newsgroups/'+topic
+    sub_dir = directory+'/'+topic
     file_name = random.sample(os.listdir(sub_dir),1)[0]
     with open(sub_dir+'/'+file_name) as f:
         content = f.read().replace('\n', '')
@@ -101,41 +102,54 @@ def print_elbow(data,vec_type,fig_count):
         #distortions.append(sum(np.min(cdist(vec_df, kmeanModel.cluster_centers_, 'euclidean'), axis=1)) / vec_df.shape[0])
         wcss.append(kmeanModel.inertia_)
 
-    print(wcss)
     plt.figure(fig_count)
     plt.plot(K, wcss, 'bx-')
     plt.xlabel('k')
     plt.ylabel('WCSS')
     plt.title('The '+vec_type+' Elbow Method showing the optimal k')
-    plt.savefig('Elbow KMeans '+vec_type)
+    plt.savefig('Plots and Imaging/Elbow KMeans '+vec_type)
 
 
-def visualize(data,vec_type,fig_count):
+def visualize(data,vec_type,fig_count,labels_true):
     kmeans = KMeans(n_clusters=3)
     kmeans.fit(data)
     preds = kmeans.predict(data)
-
+    print(vec_type+' Homogenity Score: ',homogeneity_score(labels_true,preds))
+    print(vec_type+' V Score: ',v_measure_score(labels_true,preds))
     colmap = {0:'r',1:'b',2:'g',3:'k',4:'y'}
     label_color = [colmap[l] for l in preds]
     plt.figure(fig_count)
     plt.scatter(data['X'],data['Y'],c = label_color)
-    plt.savefig('NEWSGROUPS '+vec_type+' K MEANS PLOT')
+    plt.savefig('Plots and Imaging/NEWSGROUPS '+vec_type+' K MEANS PLOT')
 
 #PREPROCESSING BEFORE CLUSTERING
-train_data = []
-for topic in random.sample(os.listdir(directory),5):
-    sub_dir = '20news-19997/20_newsgroups/'+topic
-    for filename in random.sample(os.listdir(sub_dir),10):
-        with open(sub_dir+'/'+filename) as f:
-            content = f.read().replace('\n','')
+train_data=[]
+labels_true=[]
+i=0
+for topic in random.sample(os.listdir(directory),3):
+    sub_dir = 'Datasets/20news-19997/20_newsgroups/'+topic
+    k = 100
+    for filename in os.listdir(sub_dir):
+        if k==0:
+            break
+        try:
+            with open(sub_dir+'/'+filename) as f:
+                content = f.read().replace('\n','')
+        except:
+            continue
         train_data.append(content)
+        labels_true.append(i)
+        k-=1
+
+    i+=1
+
 
 train_data_processed = []
 for data in train_data:
     train_data_processed.append(preprocess(data,n_grams=2,not_cluster=False))
 
 
-print('*****************DOC2VEC METHOD******************************')
+print('*********************DOC2VEC METHOD******************************')
 VEC_TYPE = 'DOC2VEC'
 
 tagged_data = [TaggedDocument(words=word_tokenize(_d), tags=[str(i)]) for i, _d in enumerate(train_data_processed)]
@@ -144,6 +158,7 @@ max_epochs = 30
 vec_size = 100
 alpha = 0.025
 
+print("BUILDNG DOC2VEC MODEL")
 model = Doc2Vec(size=vec_size,
                 alpha=alpha, 
                 min_alpha=0.00025,
@@ -167,8 +182,8 @@ for doc in tagged_data:
     vec = model.docvecs[doc[1][0]]
     vecs.append(vec)
     
-
 vec_df = pd.DataFrame(vecs)
+print("DOC2VEC MODEL COMPLETE")
 
 #Dimensionality reduction
 pca = PCA(n_components=2)
@@ -177,7 +192,7 @@ principalDf = pd.DataFrame(data = principalComponents
              , columns = ['X', 'Y'])
 
 print_elbow(principalDf,VEC_TYPE,1)
-visualize(principalDf,VEC_TYPE,2)
+visualize(principalDf,VEC_TYPE,2,labels_true)
 
 print('*****************TFIDF METHOD******************************')
 VEC_TYPE = 'TFIDF'
@@ -191,4 +206,4 @@ principalDf1 = pd.DataFrame(train_PCA,columns = ['X','Y'])
 
 
 print_elbow(principalDf1,VEC_TYPE,3)
-visualize(principalDf1,VEC_TYPE,4)
+visualize(principalDf1,VEC_TYPE,4,labels_true)

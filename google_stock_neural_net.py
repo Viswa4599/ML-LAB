@@ -17,10 +17,12 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split as tts
 from tqdm import tqdm_notebook
 import os
+from sklearn.externals import joblib
+import pickle
 import matplotlib.pyplot as plt
 
-train_data = pd.read_csv('Google_Stock_Price_Train.csv')
-test_data = pd.read_csv('Google_Stock_Price_Test.csv')
+train_data = pd.read_csv('Datasets/Google_Stock_Price_Train.csv')
+test_data = pd.read_csv('Datasets/Google_Stock_Price_Test.csv')
 test_data
 
 def process(data):
@@ -52,12 +54,14 @@ def process(data):
     x = data.loc[:,train_cols].values
     sc = MinMaxScaler(feature_range = (0, 1))
     x_train = sc.fit_transform(x)
-    return pd.DataFrame(x_train)
+    scalerfile = 'scaler.sav'
+    pickle.dump(sc, open(scalerfile, 'wb'))
+    return x_train
 
-train = process(train_data)
-test = process(test_data)
+x_train = process(train_data)
+x_test = process(test_data)
 
-TIME_STEPS = 3
+TIME_STEPS = 2
 BATCH_SIZE = 4
 def build_timeseries(mat, y_col_index):
     # y_col_index is the index of column that would act as output column
@@ -66,9 +70,10 @@ def build_timeseries(mat, y_col_index):
     dim_1 = mat.shape[1]
     x = np.zeros((dim_0, TIME_STEPS, dim_1))
     y = np.zeros((dim_0,))
-    
-    for i in tqdm_notebook(range(dim_0)):
+
+    for i in range(dim_0):
         x[i] = mat[i:TIME_STEPS+i]
+
         y[i] = mat[TIME_STEPS+i, y_col_index]
     print("length of time-series i/o",x.shape,y.shape)
     return x, y
@@ -123,6 +128,8 @@ predicted_stock_price
 x_test_df = pd.DataFrame(x_test[0:16])
 real_stock_price = x_test_df[3]
 
+scalerfile = 'scaler.sav'
+sc= pickle.load(open(scalerfile, 'rb'))
 pred_org = (predicted_stock_price*sc.data_range_[3])+sc.data_min_[3]
 actual_org = (real_stock_price*sc.data_range_[3])+sc.data_min_[3]
 pred_org
